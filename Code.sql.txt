@@ -1,0 +1,68 @@
+-- SQL Code for Marshall Andrews, Churn Project 06/23/18
+-- Creates a temp file of 1st and last day of Jan, Feb, Mar 2017 
+-- called months
+WITH months as
+ (SELECT '2017-01-01' as first_day,
+         '2017-01-31' as last_day
+  UNION
+  SELECT '2017-02-01' as first_day,
+         '2017-02-28' as last_day
+  UNION
+  SELECT '2017-03-01' as first_day,
+         '2017-03-31' as last_day),
+-- Creates a temp cross join file from subscriptions and months
+cross_join AS 
+  (SELECT subscriptions.*, months.*
+  FROM subscriptions
+  CROSS JOIN months),
+-- Creates a temp status file of active segment of 87 and 30 
+-- subscriptions
+status AS
+  (SELECT id, first_day as 'month',
+   CASE 
+   WHEN (subscription_start < first_day)
+    AND (subscription_end > first_day
+         OR subscription_end IS NULL)
+    AND (segment = 87)
+      THEN 1
+      ELSE 0
+   END as is_active_87, 
+ CASE 
+   WHEN (subscription_start < first_day)
+    AND (subscription_end > first_day
+         OR subscription_end IS NULL)
+    AND (segment = 30)
+      THEN 1
+      ELSE 0
+   END as is_active_30,
+  CASE 
+  WHEN (subscription_end BETWEEN first_day AND last_day) 
+   AND (segment = 87) 
+      THEN 1
+      ELSE 0
+   END as is_canceled_87,
+  CASE
+  WHEN (subscription_end BETWEEN first_day AND last_day) 
+   AND (segment = 30) 
+      THEN 1
+      ELSE 0
+   END as is_canceled_30
+   FROM cross_join),
+-- Creates a temp status aggregate file 
+status_aggregate as 
+(SELECT month, 
+ sum(is_active_87) as 'active87',    
+ sum(is_active_30) as 'active30',
+ sum(is_active_87) + sum(is_active_30) as 'total_active',
+ sum(is_canceled_87) as 'canceled87',
+ sum(is_canceled_30) as 'canceled30',
+ sum(is_canceled_87) + sum(is_canceled_30) as 'total_canceled'
+ FROM status
+ GROUP BY month)
+-- Creates a churn rate for each segment
+SELECT month,
+round(1.0 * canceled87/active87,3) AS 'churn_rate_87',
+round(1.0 * canceled30/active30,3) AS 'churn_rate_30',
+round(1.0 * total_canceled/total_active,3) AS 'total_churn_rate'
+FROM status_aggregate;
+
